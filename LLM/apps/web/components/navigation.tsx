@@ -39,6 +39,16 @@ export function Navigation() {
                 >
                   Documents
                 </Link>
+                <Link
+                  href="/analysis"
+                  className={`text-sm font-medium transition-colors hover:text-primary ${
+                    isActive("/analysis")
+                      ? "text-primary"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  Analysis
+                </Link>
               </div>
             )}
           </div>

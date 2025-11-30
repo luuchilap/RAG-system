@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import settings
 from app.database import init_db, close_db
-from app.api import auth, chat, documents, rag
+from app.api import auth, chat, documents, rag, analysis
 
 
 # Create FastAPI application with enhanced OpenAPI metadata
@@ -51,6 +51,10 @@ app = FastAPI(
         {
             "name": "rag",
             "description": "RAG (Retrieval-Augmented Generation) endpoints for querying document embeddings."
+        },
+        {
+            "name": "analysis",
+            "description": "Weakness analysis endpoints for analyzing test history and generating practice questions."
         }
     ]
 )
@@ -69,6 +73,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 app.include_router(rag.router, prefix="/api/rag", tags=["rag"])
+app.include_router(analysis.router, prefix="/api/analysis", tags=["analysis"])
 
 
 # Startup event

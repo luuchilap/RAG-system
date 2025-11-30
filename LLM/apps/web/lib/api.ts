@@ -366,3 +366,89 @@ export async function deleteDocument(documentId: string): Promise<void> {
   }
 }
 
+// ============================================================================
+// Weakness Analysis API
+// ============================================================================
+
+export type TestType = "ielts" | "toeic"
+export type Skill = "reading" | "listening" | "writing" | "speaking"
+export type Difficulty = "beginner" | "intermediate" | "advanced"
+
+export interface SkillBreakdown {
+  skill: Skill
+  wrongCount: number
+  totalCount: number
+  errorRate: number
+  weakTags: string[]
+}
+
+export interface GeneratedQuestion {
+  id: string
+  targetSkill: Skill
+  targetTags: string[]
+  type: "multiple-choice" | "fill-blank"
+  content: string
+  options?: string[]
+  correctAnswer: string[]
+  explanation: string
+  difficulty: Difficulty
+}
+
+export interface WeaknessAnalysisRequest {
+  userId?: string
+  testType: TestType
+  limitAttempts?: number
+}
+
+export interface WeaknessAnalysisResponse {
+  userId: string
+  testType: TestType
+  analyzedAt: number
+  totalQuestionsAnalyzed: number
+  totalWrongAnswers: number
+  skillBreakdown: SkillBreakdown[]
+  weaknessDescription: string
+  improvementSuggestions: string[]
+  practiceQuestions: GeneratedQuestion[]
+}
+
+/**
+ * Analyze user's weakness based on recent test attempts.
+ * Requires authentication.
+ */
+export async function analyzeWeakness(
+  params: WeaknessAnalysisRequest
+): Promise<WeaknessAnalysisResponse> {
+  const response = await authenticatedFetch("/api/analysis/weakness", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      userId: params.userId || "",
+      testType: params.testType,
+      limitAttempts: params.limitAttempts || 5,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || "Failed to analyze weakness")
+  }
+
+  return response.json()
+}
+
+/**
+ * Get mock weakness analysis (for testing, no auth required).
+ */
+export async function getMockWeaknessAnalysis(): Promise<WeaknessAnalysisResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/analysis/weakness/mock`)
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || "Failed to get mock analysis")
+  }
+
+  return response.json()
+}
