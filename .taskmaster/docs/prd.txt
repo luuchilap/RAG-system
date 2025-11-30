@@ -1,0 +1,575 @@
+<context>
+# Overview  
+This project builds a **local-only LLM chatbot application** that enables users to have intelligent conversations with AI models while leveraging their own documents through Retrieval-Augmented Generation (RAG). The application solves the problem of creating a private, document-aware chatbot that can answer questions based on user-uploaded content without relying on cloud services or external authentication.
+
+**Who it's for:** Developers, researchers, and knowledge workers who need a local, private chatbot that can reference their own documents and maintain conversation history.
+
+**Why it's valuable:** Provides a complete, self-contained solution for document-based Q&A with streaming responses, user authentication, and persistent chat history—all running locally without cloud dependencies or external services.
+
+# Core Features  
+
+## 1. Streaming Chat Interface
+- **What it does:** Provides a real-time chat interface with streaming AI responses, markdown rendering, and code syntax highlighting
+- **Why it's important:** Delivers immediate feedback to users, creating a responsive and engaging conversation experience
+- **How it works:** Uses Server-Sent Events (SSE) or fetch streaming to deliver token-by-token responses from the OpenAI API, with React components rendering markdown and code blocks in real-time
+
+## 2. Document Upload and RAG System
+- **What it does:** Allows users to upload documents (PDF, TXT, MD, DOCX), which are automatically chunked, embedded, and stored in a local FAISS vector database for retrieval during conversations
+- **Why it's important:** Enables the chatbot to answer questions based on user-specific content, making it a powerful knowledge assistant rather than just a generic chatbot
+- **How it works:** Documents are processed through LangChain's text splitter, embedded using OpenAI embeddings, and stored in a local FAISS index. During queries, relevant chunks are retrieved and injected into the LLM context
+
+## 3. User Authentication System
+- **What it does:** Provides secure user registration, login, and logout functionality with session management
+- **Why it's important:** Ensures chat history and documents are private to each user, enabling multi-user support on a single instance
+- **How it works:** Uses password hashing (passlib) for secure credential storage in PostgreSQL, with JWT or session tokens for authentication state management
+
+## 4. Persistent Chat History
+- **What it does:** Stores all chat conversations in PostgreSQL, allowing users to view and continue previous conversations
+- **Why it's important:** Enables users to maintain context across sessions and reference past interactions
+- **How it works:** Each message (user and assistant) is stored with metadata (timestamp, user ID, conversation ID) in PostgreSQL, with frontend components fetching and displaying historical conversations
+
+# User Experience  
+
+## User Personas
+- **Primary:** Developers and technical users who want a local, private AI assistant that can reference their documentation and code
+- **Secondary:** Researchers and knowledge workers who need to query large document collections without exposing data to external services
+
+## Key User Flows
+
+### Flow 1: New User Onboarding
+1. User visits the application
+2. User registers with email/username and password
+3. User is automatically logged in
+4. User sees empty chat interface with document upload option
+
+### Flow 2: Document Upload and Query
+1. User uploads a document (PDF, TXT, MD, or DOCX)
+2. System processes and indexes the document (chunking, embedding, FAISS storage)
+3. User asks a question in the chat interface
+4. System retrieves relevant chunks from FAISS
+5. System streams AI response incorporating retrieved context
+6. Conversation is saved to PostgreSQL
+
+### Flow 3: Returning User
+1. User logs in with credentials
+2. User sees previous chat history
+3. User can continue existing conversations or start new ones
+4. User can upload additional documents or query existing ones
+
+## UI/UX Considerations
+- **Modern Design:** Clean, minimal interface using TailwindCSS and shadcn/ui components
+- **Responsive Layout:** Works well on desktop and tablet devices
+- **Real-time Feedback:** Streaming responses provide immediate visual feedback
+- **Code Highlighting:** Syntax highlighting for code blocks in responses
+- **Document Management:** Clear indication of uploaded documents and ability to manage them
+- **Auth States:** Clear visual distinction between authenticated and unauthenticated states
+</context>
+<PRD>
+# Technical Architecture  
+
+## System Components
+
+### Backend (FastAPI)
+- **API Server:** FastAPI application with async endpoints
+- **Authentication Module:** User registration, login, logout, and session management
+- **Chat Module:** Handles chat requests, RAG retrieval, and OpenAI API integration
+- **Document Processing Module:** File upload handling, text extraction, chunking, and embedding
+- **RAG Module:** FAISS vector database management and retrieval logic
+- **Database Layer:** PostgreSQL integration for users, chat history, and document metadata
+
+### Frontend (Next.js)
+- **App Router:** Next.js 14+ App Router architecture
+- **Chat Interface:** Streaming chat UI with markdown rendering
+- **Auth Pages:** Registration and login forms
+- **Document Upload:** File upload interface with progress indicators
+- **State Management:** React Query or SWR for data fetching and caching
+- **UI Components:** shadcn/ui component library with TailwindCSS styling
+
+### Data Storage
+- **PostgreSQL:** 
+  - Users table (id, username, email, hashed_password, created_at)
+  - Chat messages table (id, user_id, conversation_id, role, content, timestamp)
+  - Documents table (id, user_id, filename, file_path, uploaded_at, metadata)
+- **FAISS Index:** Local vector database storing document embeddings with metadata
+- **File Storage:** Local filesystem for uploaded documents (optional: store in PostgreSQL as blobs)
+
+## Data Models
+
+### User Model
+```python
+{
+  "id": UUID,
+  "username": str,
+  "email": str,
+  "hashed_password": str,
+  "created_at": datetime
+}
+```
+
+### Chat Message Model
+```python
+{
+  "id": UUID,
+  "user_id": UUID,
+  "conversation_id": UUID,
+  "role": str,  # "user" or "assistant"
+  "content": str,
+  "timestamp": datetime
+}
+```
+
+### Document Model
+```python
+{
+  "id": UUID,
+  "user_id": UUID,
+  "filename": str,
+  "file_path": str,
+  "file_type": str,  # "pdf", "txt", "md", "docx"
+  "uploaded_at": datetime,
+  "metadata": dict  # chunk count, file size, etc.
+}
+```
+
+### FAISS Vector Entry
+```python
+{
+  "vector": numpy array,  # embedding vector
+  "metadata": {
+    "document_id": UUID,
+    "chunk_index": int,
+    "text": str,
+    "user_id": UUID
+  }
+}
+```
+
+## APIs and Integrations
+
+### Backend Endpoints
+
+#### Authentication Endpoints
+- `POST /api/auth/register` - Register new user (username, email, password) → returns session token
+- `POST /api/auth/login` - Authenticate user (username/email, password) → returns session token
+- `POST /api/auth/logout` - Invalidate session token
+
+#### Chat Endpoints
+- `POST /api/chat` - Send message, retrieve RAG context, stream AI response
+  - Requires: Authentication token
+  - Input: { message: str, conversation_id?: UUID }
+  - Output: Streaming response (SSE or chunked transfer)
+
+#### Document Endpoints
+- `POST /api/documents/upload` - Upload and process document
+  - Requires: Authentication token
+  - Input: Multipart file upload
+  - Output: { document_id: UUID, status: str, chunk_count: int }
+- `GET /api/documents` - List user's documents
+  - Requires: Authentication token
+  - Output: Array of document metadata
+- `GET /api/rag/query` - Query RAG system (returns retrieved chunks only)
+  - Requires: Authentication token
+  - Input: { query: str, top_k?: int }
+  - Output: Array of retrieved document chunks
+
+#### Chat History Endpoints
+- `GET /api/chat/history` - Get user's chat history
+  - Requires: Authentication token
+  - Input: { conversation_id?: UUID, limit?: int }
+  - Output: Array of chat messages
+
+### External Integrations
+- **OpenAI API:** 
+  - Chat completions (gpt-4o-mini, gpt-4.1, o1-mini, o1-preview)
+  - Text embeddings (text-embedding-3-small)
+  - User provides their own API key
+
+## Infrastructure Requirements
+- **Python 3.10+** with FastAPI, uvicorn
+- **Node.js 18+** with Next.js 14+
+- **PostgreSQL** database (local installation)
+- **Local filesystem** for FAISS index and document storage
+- **OpenAI API key** (user-provided)
+
+# Development Roadmap  
+
+## Phase 1: Foundation and Authentication (MVP Core)
+**Scope:** Build the foundational infrastructure and user authentication system to enable secure, multi-user access.
+
+**Deliverables:**
+- PostgreSQL database setup with schema (users, chat_messages, documents tables)
+- FastAPI backend structure with async endpoints
+- User registration endpoint with password hashing
+- User login endpoint with session token generation
+- User logout endpoint
+- Authentication middleware for protected endpoints
+- Next.js frontend structure with App Router
+- Registration and login UI pages
+- Session management (token storage, validation)
+- Basic routing and layout components
+
+**Success Criteria:**
+- Users can register, login, and logout
+- Protected endpoints require valid authentication
+- User sessions persist across page refreshes
+
+## Phase 2: Basic Chat Interface (MVP Visible)
+**Scope:** Create a functional chat UI with streaming responses, enabling users to interact with the AI immediately.
+
+**Deliverables:**
+- Chat UI component with message display
+- Streaming response handling (SSE or fetch streaming)
+- Markdown rendering for chat messages
+- Code block syntax highlighting
+- Chat input component with send functionality
+- Backend `/api/chat` endpoint (without RAG initially)
+- OpenAI API integration for chat completions
+- Basic conversation flow (user message → AI response)
+- Chat history display (fetch from PostgreSQL)
+- Message persistence in PostgreSQL
+
+**Success Criteria:**
+- Users can send messages and receive streaming AI responses
+- Chat history is displayed and persists across sessions
+- Markdown and code blocks render correctly
+
+## Phase 3: Document Upload and Processing (RAG Foundation)
+**Scope:** Enable users to upload documents and process them for RAG, building the foundation for document-aware conversations.
+
+**Deliverables:**
+- File upload UI component
+- Backend file upload endpoint with multipart handling
+- Text extraction for PDF, TXT, MD, DOCX files
+- LangChain text chunking (RecursiveCharacterTextSplitter)
+- OpenAI embeddings generation
+- FAISS index creation and vector storage
+- Document metadata storage in PostgreSQL
+- Document list UI showing uploaded files
+- File type validation and error handling
+
+**Success Criteria:**
+- Users can upload supported document types
+- Documents are chunked, embedded, and stored in FAISS
+- Document metadata is saved in PostgreSQL
+- Users can view their uploaded documents
+
+## Phase 4: RAG Integration (Complete MVP)
+**Scope:** Integrate RAG retrieval into the chat flow, enabling document-aware conversations.
+
+**Deliverables:**
+- RAG retrieval module (FAISS query with top-k)
+- Integration of RAG context into chat endpoint
+- Query embedding generation for user messages
+- Context injection into OpenAI prompts
+- `/api/rag/query` endpoint for testing retrieval
+- User-specific FAISS index filtering (per-user document isolation)
+- Conversation context management (maintaining chat history in prompts)
+
+**Success Criteria:**
+- Chat responses incorporate relevant document chunks
+- Users can query their uploaded documents
+- RAG retrieval returns contextually relevant chunks
+- Each user's documents are isolated from others
+
+## Phase 5: Enhanced UX and Polish
+**Scope:** Improve user experience with better UI, error handling, and additional features.
+
+**Deliverables:**
+- Enhanced chat UI with better styling and animations
+- Loading states and progress indicators
+- Error handling and user-friendly error messages
+- Document deletion functionality
+- Conversation management (create new, delete conversations)
+- Improved markdown rendering with better code highlighting
+- Responsive design improvements
+- Input validation and sanitization
+- Rate limiting for API endpoints (optional)
+
+**Success Criteria:**
+- Polished, professional-looking interface
+- Clear error messages and loading states
+- Users can manage their documents and conversations
+- Application feels complete and production-ready for local use
+
+## Future Enhancements (Post-MVP)
+- Support for additional file types (CSV, Excel, images with OCR)
+- Advanced RAG techniques (hybrid search, re-ranking)
+- Conversation export (PDF, Markdown)
+- Document search and filtering
+- Multi-model support (switching between OpenAI models)
+- Custom prompt templates
+- Document versioning
+- Batch document upload
+- Advanced chunking strategies (semantic chunking)
+
+# Logical Dependency Chain
+
+## Foundation Layer (Must Build First)
+1. **Database Schema Setup** - PostgreSQL tables must exist before any data operations
+2. **Authentication System** - All other features require user authentication
+3. **Basic Backend Structure** - FastAPI app, routing, middleware setup
+4. **Basic Frontend Structure** - Next.js app, routing, layout, auth pages
+
+## Core Functionality Layer (Build in Parallel Where Possible)
+5. **Chat Backend (without RAG)** - Can be built independently of document processing
+6. **Chat Frontend** - Can be built in parallel with backend, using mock responses initially
+7. **Document Upload Backend** - Can be built independently of chat
+8. **Document Processing Pipeline** - Depends on upload, but independent of chat
+
+## Integration Layer (Requires Previous Layers)
+9. **RAG Retrieval Module** - Requires document processing to be complete
+10. **RAG-Chat Integration** - Requires both chat backend and RAG module
+11. **Complete User Flow** - Requires all previous components
+
+## Enhancement Layer (Can Be Added Incrementally)
+12. **UI Polish** - Can be added at any time, improves incrementally
+13. **Error Handling** - Should be added as features are built, but can be enhanced later
+14. **Additional Features** - Can be added based on user feedback
+
+## Quick Path to Visible Frontend
+To get something usable/visible quickly:
+1. Start with authentication (backend + frontend) - 2-3 days
+2. Build basic chat UI with mock streaming - 1-2 days (visible frontend)
+3. Connect real OpenAI API - 1 day (working frontend)
+4. Add document upload UI - 1 day (more visible features)
+5. Build document processing - 2-3 days (background work)
+6. Integrate RAG - 2-3 days (complete functionality)
+
+This approach provides visible progress early while building the complete system.
+
+# Risks and Mitigations  
+
+## Technical Challenges
+
+### Risk: FAISS Index Management
+**Challenge:** Managing per-user FAISS indices, index persistence, and efficient querying
+**Mitigation:** 
+- Start with a single global index with user_id metadata filtering
+- Use FAISS's built-in serialization for index persistence
+- Consider separate indices per user if performance becomes an issue
+- Document clear patterns for index management
+
+### Risk: Streaming Response Complexity
+**Challenge:** Implementing reliable streaming with proper error handling and connection management
+**Mitigation:**
+- Use FastAPI's StreamingResponse with proper async generators
+- Implement connection timeout handling
+- Add retry logic for OpenAI API failures
+- Test with various network conditions
+
+### Risk: Document Processing Performance
+**Challenge:** Large documents may take significant time to process (chunking, embedding)
+**Mitigation:**
+- Implement async processing with background tasks
+- Add progress indicators for document processing
+- Set reasonable file size limits
+- Consider chunking optimization for very large documents
+
+### Risk: OpenAI API Rate Limits and Costs
+**Challenge:** User's API key may hit rate limits or incur unexpected costs
+**Mitigation:**
+- Implement rate limiting on the application side
+- Add clear warnings about API usage
+- Provide model selection to use cheaper models by default
+- Consider caching embeddings for repeated queries
+
+## MVP Scope Challenges
+
+### Risk: Feature Creep
+**Challenge:** Adding too many features before core functionality is solid
+**Mitigation:**
+- Strictly follow the phased roadmap
+- Complete each phase fully before moving to the next
+- Document future enhancements separately
+- Focus on core chat + RAG functionality first
+
+### Risk: Over-Engineering
+**Challenge:** Building complex solutions when simple ones suffice
+**Mitigation:**
+- Start with the simplest implementation that works
+- Use proven libraries (LangChain, FAISS) rather than building from scratch
+- Avoid premature optimization
+- Keep local-only scope (no cloud infrastructure complexity)
+
+## Resource Constraints
+
+### Risk: Development Time Underestimation
+**Challenge:** RAG integration and streaming can be complex
+**Mitigation:**
+- Break down into small, testable components
+- Build and test each phase independently
+- Use existing libraries and patterns where possible
+- Prioritize working MVP over perfect implementation
+
+### Risk: Local Environment Setup Complexity
+**Challenge:** Users need PostgreSQL, Python, Node.js all configured
+**Mitigation:**
+- Provide clear setup instructions
+- Create simple database migration scripts
+- Document all dependencies and versions
+- Consider providing a setup script for common configurations
+
+# Appendix  
+
+## Technical Specifications
+
+### Backend Dependencies (Python)
+```
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+langchain>=0.1.0
+langchain-openai>=0.0.5
+langchain-community>=0.0.20
+faiss-cpu>=1.7.4
+pydantic>=2.5.0
+python-multipart>=0.0.6
+passlib[bcrypt]>=1.7.4
+asyncpg>=0.29.0
+pyjwt>=2.8.0
+python-docx>=1.1.0
+pypdf>=4.0.0
+```
+
+### Frontend Dependencies (Node.js)
+```
+next>=14.0.0
+react>=18.0.0
+react-dom>=18.0.0
+tailwindcss>=3.3.0
+@radix-ui/react-* (shadcn/ui components)
+react-markdown>=9.0.0
+highlight.js>=11.9.0
+swr>=2.2.0 (or @tanstack/react-query)
+```
+
+### Database Schema (PostgreSQL)
+
+#### Users Table
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    hashed_password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### Chat Messages Table
+```sql
+CREATE TABLE chat_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    conversation_id UUID NOT NULL,
+    role VARCHAR(50) NOT NULL,  -- 'user' or 'assistant'
+    content TEXT NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_chat_messages_user_conversation ON chat_messages(user_id, conversation_id);
+CREATE INDEX idx_chat_messages_timestamp ON chat_messages(timestamp);
+```
+
+#### Documents Table
+```sql
+CREATE TABLE documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    filename VARCHAR(255) NOT NULL,
+    file_path VARCHAR(500) NOT NULL,
+    file_type VARCHAR(50) NOT NULL,
+    file_size BIGINT,
+    chunk_count INTEGER,
+    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    metadata JSONB
+);
+
+CREATE INDEX idx_documents_user ON documents(user_id);
+```
+
+### File Structure
+
+#### Backend Structure
+```
+backend/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                 # FastAPI app
+│   ├── config.py               # Configuration
+│   ├── database.py             # PostgreSQL connection
+│   ├── models/
+│   │   ├── user.py
+│   │   ├── chat.py
+│   │   └── document.py
+│   ├── api/
+│   │   ├── auth.py             # Auth endpoints
+│   │   ├── chat.py             # Chat endpoint
+│   │   └── documents.py        # Document endpoints
+│   ├── services/
+│   │   ├── auth_service.py
+│   │   ├── chat_service.py
+│   │   ├── rag_service.py
+│   │   └── embedding_service.py
+│   ├── utils/
+│   │   ├── text_extractor.py
+│   │   └── chunking.py
+│   └── middleware/
+│       └── auth.py             # Auth middleware
+├── faiss_indexes/              # Local FAISS storage
+├── uploaded_documents/          # Local file storage
+└── requirements.txt
+```
+
+#### Frontend Structure
+```
+frontend/
+├── app/
+│   ├── layout.tsx
+│   ├── page.tsx                # Home/chat page
+│   ├── login/
+│   │   └── page.tsx
+│   ├── register/
+│   │   └── page.tsx
+│   └── api/                    # API route handlers if needed
+├── components/
+│   ├── chat/
+│   │   ├── ChatInterface.tsx
+│   │   ├── MessageList.tsx
+│   │   ├── MessageInput.tsx
+│   │   └── StreamingMessage.tsx
+│   ├── documents/
+│   │   ├── DocumentUpload.tsx
+│   │   └── DocumentList.tsx
+│   └── auth/
+│       ├── LoginForm.tsx
+│       └── RegisterForm.tsx
+├── lib/
+│   ├── api.ts                  # API client functions
+│   └── utils.ts
+├── hooks/
+│   └── useChat.ts
+└── package.json
+```
+
+## Research Findings
+
+### RAG Best Practices
+- Chunk size: 500-1000 characters with 100-200 character overlap
+- Embedding model: text-embedding-3-small provides good balance of quality and cost
+- Top-k retrieval: 3-5 chunks typically provide sufficient context
+- Chunk metadata should include document ID, user ID, and position for traceability
+
+### Streaming Implementation
+- FastAPI StreamingResponse with async generators is most reliable
+- SSE (Server-Sent Events) provides better browser compatibility than chunked transfer
+- Client should handle connection drops gracefully with retry logic
+- Buffer management important for smooth streaming experience
+
+### Security Considerations
+- Password hashing: Use bcrypt with passlib (cost factor 12+)
+- JWT tokens: Include expiration (24 hours) and refresh mechanism
+- File upload: Validate file types, scan for malicious content, limit file sizes
+- SQL injection: Use parameterized queries (asyncpg/SQLAlchemy handles this)
+- XSS: Sanitize user input, especially in chat messages
+</PRD>
+

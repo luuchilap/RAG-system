@@ -1,0 +1,798 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": "1",
+        "title": "Set up PostgreSQL Database Schema",
+        "description": "Create the PostgreSQL database schema with tables for users, chat messages, and documents as specified in the PRD.",
+        "details": "This task involves setting up the PostgreSQL database with the required tables and indexes. The schema should include:\n\n1. Users table with fields for id (UUID), username, email, hashed_password, and created_at\n2. Chat messages table with fields for id, user_id, conversation_id, role, content, and timestamp\n3. Documents table with fields for id, user_id, filename, file_path, file_type, file_size, chunk_count, uploaded_at, and metadata\n\nImplement the SQL schema as defined in the PRD's Appendix section, including all specified indexes for performance optimization.\n\n```sql\n-- Create users table\nCREATE TABLE users (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    username VARCHAR(255) UNIQUE NOT NULL,\n    email VARCHAR(255) UNIQUE NOT NULL,\n    hashed_password VARCHAR(255) NOT NULL,\n    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\n\n-- Create chat messages table\nCREATE TABLE chat_messages (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    user_id UUID REFERENCES users(id) ON DELETE CASCADE,\n    conversation_id UUID NOT NULL,\n    role VARCHAR(50) NOT NULL,  -- 'user' or 'assistant'\n    content TEXT NOT NULL,\n    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n);\n\nCREATE INDEX idx_chat_messages_user_conversation ON chat_messages(user_id, conversation_id);\nCREATE INDEX idx_chat_messages_timestamp ON chat_messages(timestamp);\n\n-- Create documents table\nCREATE TABLE documents (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    user_id UUID REFERENCES users(id) ON DELETE CASCADE,\n    filename VARCHAR(255) NOT NULL,\n    file_path VARCHAR(500) NOT NULL,\n    file_type VARCHAR(50) NOT NULL,\n    file_size BIGINT,\n    chunk_count INTEGER,\n    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n    metadata JSONB\n);\n\nCREATE INDEX idx_documents_user ON documents(user_id);\n```\n\nAlso create a database connection module in Python using asyncpg for async database operations.",
+        "testStrategy": "1. Write SQL scripts to create test data for each table\n2. Verify all tables and indexes are created correctly using PostgreSQL commands\n3. Test database connection from Python using asyncpg\n4. Verify foreign key constraints work correctly by attempting to delete a user with associated messages and documents\n5. Test query performance with the created indexes using EXPLAIN ANALYZE",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create SQL schema script for database tables",
+            "description": "Develop the SQL script to create the database tables for users, chat messages, and documents as specified in the PRD.",
+            "dependencies": [],
+            "details": "Create a SQL script file that includes the CREATE TABLE statements for users (with UUID, username, email, etc.), chat_messages (with message details and appropriate foreign keys), and documents (with file metadata). Include all required indexes as specified in the PRD. The script should be idempotent, checking if tables exist before creating them.",
+            "status": "done",
+            "testStrategy": "Verify script syntax with PostgreSQL parser. Test script execution in a test database environment. Confirm all tables, columns, constraints, and indexes are created as specified.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:00:41.894Z"
+          },
+          {
+            "id": 2,
+            "title": "Implement database connection module with asyncpg",
+            "description": "Create a Python module for handling asynchronous database connections using asyncpg library.",
+            "dependencies": [
+              1
+            ],
+            "details": "Develop a database connection module that provides async connection pooling with asyncpg. Implement functions for connection initialization, query execution, and connection pool management. Include error handling for database connection issues and transaction management utilities. Create a configuration system to load database credentials from environment variables.",
+            "status": "done",
+            "testStrategy": "Test connection establishment with valid and invalid credentials. Verify connection pooling works correctly under load. Test transaction management with commit and rollback scenarios. Ensure proper error handling for connection failures.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:00:41.896Z"
+          },
+          {
+            "id": 3,
+            "title": "Create database models and schema validation",
+            "description": "Implement Pydantic models for database entities and schema validation for database operations.",
+            "dependencies": [
+              1
+            ],
+            "details": "Create Pydantic models that correspond to the database tables (User, ChatMessage, Document). Implement validation rules for each field according to business requirements. Add methods for converting between database records and Pydantic models. Include JSON serialization/deserialization support for all models, especially for the metadata JSONB field in documents table.",
+            "status": "done",
+            "testStrategy": "Test model validation with valid and invalid data. Verify serialization/deserialization works correctly, especially for complex types. Test conversion between database records and model instances.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:00:41.898Z"
+          },
+          {
+            "id": 4,
+            "title": "Implement database repository classes",
+            "description": "Create repository classes that encapsulate database operations for each entity type.",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Develop repository classes (UserRepository, ChatMessageRepository, DocumentRepository) that handle CRUD operations for each entity. Implement methods for querying, filtering, and pagination. Use the database connection module for all database operations. Include transaction support for operations that modify multiple tables. Add proper error handling and logging for database operations.",
+            "status": "done",
+            "testStrategy": "Unit test each repository method with mock database connections. Integration test with a test database to verify actual database interactions. Test transaction handling with multi-table operations. Verify error handling works correctly for various database error scenarios.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:00:41.899Z"
+          },
+          {
+            "id": 5,
+            "title": "Create database migration system",
+            "description": "Implement a database migration system to manage schema changes and versioning.",
+            "dependencies": [
+              1
+            ],
+            "details": "Set up a migration system using Alembic or a similar tool to manage database schema versions. Create the initial migration based on the SQL schema. Configure the migration system to work with the project's database connection settings. Document the process for creating and applying migrations. Include a verification step to ensure migrations are applied correctly.",
+            "status": "done",
+            "testStrategy": "Test migration application on an empty database. Test migration rollback functionality. Verify schema version tracking works correctly. Test migration in different environments to ensure consistency.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:00:41.900Z"
+          }
+        ],
+        "updatedAt": "2025-11-30T04:00:41.900Z"
+      },
+      {
+        "id": "2",
+        "title": "Implement Backend Authentication System",
+        "description": "Create the authentication system for user registration, login, and session management using FastAPI, passlib for password hashing, and JWT for tokens.",
+        "details": "Implement the authentication system with the following components:\n\n1. User model with Pydantic for validation\n2. Password hashing using passlib with bcrypt (cost factor 12+)\n3. JWT token generation and validation with expiration (24 hours)\n4. Authentication middleware for protected endpoints\n5. API endpoints for registration, login, and logout\n\n```python\n# Example implementation for auth_service.py\nfrom passlib.context import CryptContext\nimport jwt\nfrom datetime import datetime, timedelta\nfrom fastapi import Depends, HTTPException, status\nfrom fastapi.security import OAuth2PasswordBearer\n\npwd_context = CryptContext(schemes=[\"bcrypt\"], deprecated=\"auto\")\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"/api/auth/login\")\nSECRET_KEY = \"your-secret-key\"  # In production, use environment variable\nALGORITHM = \"HS256\"\n\ndef verify_password(plain_password, hashed_password):\n    return pwd_context.verify(plain_password, hashed_password)\n\ndef get_password_hash(password):\n    return pwd_context.hash(password)\n\nasync def create_user(db, username, email, password):\n    hashed_password = get_password_hash(password)\n    # Insert user into database\n    # Return user object\n\nasync def authenticate_user(db, username, password):\n    # Get user from database\n    # Verify password\n    # Return user if valid\n\ndef create_access_token(data: dict, expires_delta: timedelta = timedelta(hours=24)):\n    to_encode = data.copy()\n    expire = datetime.utcnow() + expires_delta\n    to_encode.update({\"exp\": expire})\n    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)\n    return encoded_jwt\n\nasync def get_current_user(token: str = Depends(oauth2_scheme)):\n    # Decode and validate JWT token\n    # Return user if valid\n```\n\nImplement the API endpoints in auth.py:\n```python\n@router.post(\"/register\")\nasync def register(user_data: UserCreate):\n    # Create user and return token\n\n@router.post(\"/login\")\nasync def login(form_data: OAuth2PasswordRequestForm = Depends()):\n    # Authenticate user and return token\n\n@router.post(\"/logout\")\nasync def logout(current_user: User = Depends(get_current_user)):\n    # Invalidate token (optional: add to blacklist)\n```",
+        "testStrategy": "1. Unit tests for password hashing and verification\n2. Unit tests for JWT token generation and validation\n3. Integration tests for user registration with valid and invalid data\n4. Integration tests for login with correct and incorrect credentials\n5. Integration tests for protected endpoints with and without valid tokens\n6. Test token expiration and refresh functionality\n7. Load testing to ensure authentication system can handle multiple concurrent requests",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create User Model and Database Schema",
+            "description": "Implement the user model with Pydantic for validation and create the database schema for user storage.",
+            "dependencies": [],
+            "details": "Create a Pydantic model for user data validation including username, email, and password fields. Implement database models for user storage with SQLAlchemy. Include fields for user_id, username, email, hashed_password, created_at, and is_active. Set up database migrations for the user table.",
+            "status": "done",
+            "testStrategy": "Unit tests for Pydantic model validation with valid and invalid data. Integration tests for database operations including user creation, retrieval, and update.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:01:25.391Z"
+          },
+          {
+            "id": 2,
+            "title": "Implement Password Hashing and JWT Token Generation",
+            "description": "Create the password hashing service using passlib with bcrypt and implement JWT token generation and validation.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement password hashing using passlib with bcrypt (cost factor 12+). Create functions for password verification. Implement JWT token generation with proper claims (sub, exp, iat) and 24-hour expiration. Create token validation functions to verify token integrity and expiration. Store SECRET_KEY securely using environment variables.",
+            "status": "done",
+            "testStrategy": "Unit tests for password hashing and verification with various password complexities. Unit tests for JWT token generation, validation, and expiration handling.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:01:25.392Z"
+          },
+          {
+            "id": 3,
+            "title": "Create Authentication Middleware",
+            "description": "Implement the authentication middleware for protecting API endpoints using JWT token validation.",
+            "dependencies": [
+              2
+            ],
+            "details": "Create a dependency function for FastAPI that extracts and validates JWT tokens from request headers. Implement error handling for missing, invalid, or expired tokens with appropriate HTTP status codes. Create a get_current_user function that returns the authenticated user based on the token. Implement role-based access control for admin-only endpoints if needed.",
+            "status": "done",
+            "testStrategy": "Unit tests for token extraction and validation. Integration tests for protected endpoints with valid and invalid tokens. Tests for expired token handling and proper error responses.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:01:25.393Z"
+          },
+          {
+            "id": 4,
+            "title": "Implement Registration and Login Endpoints",
+            "description": "Create the API endpoints for user registration and login with proper validation and error handling.",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Implement the /register endpoint that validates user input, checks for existing users, hashes passwords, and creates new user records. Create the /login endpoint that authenticates users and generates JWT tokens. Implement proper error handling for invalid credentials, duplicate users, and other edge cases. Add input validation for email format, password strength, and username requirements.",
+            "status": "done",
+            "testStrategy": "Integration tests for registration with valid and invalid data. Tests for duplicate username/email handling. Integration tests for login with correct and incorrect credentials. Tests for proper token generation and response format.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:01:25.394Z"
+          },
+          {
+            "id": 5,
+            "title": "Implement Logout and Token Management",
+            "description": "Create the logout endpoint and implement token management for invalidation and refresh functionality.",
+            "dependencies": [
+              4
+            ],
+            "details": "Implement the /logout endpoint that invalidates the current token. Create a token blacklist mechanism using Redis or database storage to track invalidated tokens. Add refresh token functionality for extending sessions without requiring re-login. Implement token rotation for security. Create endpoints for password reset if required. Add session management features like listing active sessions and forced logout.",
+            "status": "done",
+            "testStrategy": "Integration tests for logout functionality. Tests for token blacklisting and rejection of blacklisted tokens. Tests for refresh token functionality. Performance tests for token validation with blacklist checks.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:01:25.395Z"
+          }
+        ],
+        "updatedAt": "2025-11-30T04:01:25.395Z"
+      },
+      {
+        "id": "3",
+        "title": "Set up FastAPI Backend Structure",
+        "description": "Create the FastAPI application structure with routing, middleware, and basic configuration as outlined in the PRD.",
+        "details": "Set up the FastAPI backend with the following structure:\n\n1. Create the main FastAPI application with CORS middleware\n2. Set up the folder structure as specified in the PRD\n3. Configure environment variables and application settings\n4. Implement dependency injection for database and services\n5. Set up error handling and logging\n\n```python\n# main.py\nfrom fastapi import FastAPI, Depends, HTTPException\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom app.api import auth, chat, documents\nfrom app.database import get_db\nfrom app.config import settings\n\napp = FastAPI(title=\"Local LLM Chatbot\")\n\n# Configure CORS\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"http://localhost:3000\"],  # Frontend URL\n    allow_credentials=True,\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],\n)\n\n# Include routers\napp.include_router(auth.router, prefix=\"/api/auth\", tags=[\"auth\"])\napp.include_router(chat.router, prefix=\"/api/chat\", tags=[\"chat\"])\napp.include_router(documents.router, prefix=\"/api/documents\", tags=[\"documents\"])\n\n# Health check endpoint\n@app.get(\"/api/health\")\nasync def health_check():\n    return {\"status\": \"ok\"}\n\n# Error handlers\n@app.exception_handler(HTTPException)\nasync def http_exception_handler(request, exc):\n    return JSONResponse(\n        status_code=exc.status_code,\n        content={\"detail\": exc.detail},\n    )\n```\n\nCreate the config.py file for settings:\n```python\nfrom pydantic_settings import BaseSettings\n\nclass Settings(BaseSettings):\n    DATABASE_URL: str\n    SECRET_KEY: str\n    ALGORITHM: str = \"HS256\"\n    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours\n    UPLOAD_FOLDER: str = \"./uploaded_documents\"\n    FAISS_INDEX_FOLDER: str = \"./faiss_indexes\"\n    \n    class Config:\n        env_file = \".env\"\n\nsettings = Settings()\n```",
+        "testStrategy": "1. Test application startup and configuration loading\n2. Verify all routes are correctly registered\n3. Test CORS configuration with requests from allowed and disallowed origins\n4. Test health check endpoint\n5. Verify error handling by triggering various exceptions\n6. Test dependency injection for database and services\n7. Ensure environment variables are correctly loaded from .env file",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create main FastAPI application with CORS middleware",
+            "description": "Set up the main FastAPI application file with proper CORS configuration to allow frontend communication.",
+            "dependencies": [],
+            "details": "Create main.py with FastAPI instance, configure CORS middleware to allow requests from the frontend (localhost:3000), set up the health check endpoint, and implement basic error handlers. Include proper imports and application initialization code.",
+            "status": "done",
+            "testStrategy": "Test application startup, verify CORS headers in responses, test health check endpoint returns 200 status, verify error handlers correctly format exception responses.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:00:41.902Z"
+          },
+          {
+            "id": 2,
+            "title": "Set up folder structure and router configuration",
+            "description": "Create the recommended folder structure and set up router modules for different API endpoints.",
+            "dependencies": [
+              1
+            ],
+            "details": "Create the folder structure with app/ directory containing api/, database/, models/, services/, and utils/ subdirectories. Set up router modules for auth, chat, and documents endpoints. Configure router inclusion in the main application with appropriate prefixes and tags.",
+            "status": "done",
+            "testStrategy": "Verify all directories exist with correct structure, test router registration by checking available endpoints, ensure API paths match the expected prefixes.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:00:41.904Z"
+          },
+          {
+            "id": 3,
+            "title": "Configure environment variables and application settings",
+            "description": "Create configuration module for loading and validating environment variables using Pydantic.",
+            "dependencies": [
+              1
+            ],
+            "details": "Create config.py with Settings class extending BaseSettings, define required environment variables (DATABASE_URL, SECRET_KEY, etc.), set default values where appropriate, configure .env file loading, and create a singleton settings instance for application-wide use.",
+            "status": "done",
+            "testStrategy": "Test configuration loading with various environment setups, verify required variables are validated, test default values are applied correctly, check .env file loading works as expected.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:00:41.904Z"
+          },
+          {
+            "id": 4,
+            "title": "Implement dependency injection for database and services",
+            "description": "Set up dependency injection system for database connections and service instances.",
+            "dependencies": [
+              2,
+              3
+            ],
+            "details": "Create database.py with get_db dependency function for database connection, implement service factory functions as dependencies, ensure proper resource cleanup with dependency yielding pattern, and configure dependencies in router endpoints.",
+            "status": "done",
+            "testStrategy": "Test database connection dependency with mock database, verify connection is properly closed after request, test service dependencies return expected instances, check dependency overriding works for testing.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:00:41.905Z"
+          },
+          {
+            "id": 5,
+            "title": "Set up error handling and logging",
+            "description": "Implement comprehensive error handling and logging system for the application.",
+            "dependencies": [
+              1,
+              3
+            ],
+            "details": "Create custom exception classes, implement exception handlers for different error types, set up structured logging with different log levels, configure log formatting and output destinations based on environment, implement middleware for request/response logging.",
+            "status": "done",
+            "testStrategy": "Test exception handlers with various error scenarios, verify logs are correctly formatted and contain expected information, test log level configuration works as expected, check request/response logging captures appropriate data.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:00:41.906Z"
+          }
+        ],
+        "updatedAt": "2025-11-30T04:00:41.906Z"
+      },
+      {
+        "id": "4",
+        "title": "Create Next.js Frontend Structure",
+        "description": "Set up the Next.js frontend application with App Router, layout components, and authentication pages as specified in the PRD.",
+        "details": "Create the Next.js frontend with the following components:\n\n1. Set up Next.js 14+ with App Router architecture\n2. Install and configure TailwindCSS and shadcn/ui components\n3. Create the basic layout structure with navigation\n4. Implement authentication pages (login and registration)\n5. Set up client-side authentication state management\n\n```jsx\n// app/layout.tsx\nimport { Inter } from 'next/font/google'\nimport './globals.css'\n\nconst inter = Inter({ subsets: ['latin'] })\n\nexport default function RootLayout({ children }) {\n  return (\n    <html lang=\"en\">\n      <body className={inter.className}>\n        <main className=\"min-h-screen bg-background\">\n          {children}\n        </main>\n      </body>\n    </html>\n  )\n}\n```\n\n```jsx\n// app/login/page.tsx\n'use client'\n\nimport { useState } from 'react'\nimport { useRouter } from 'next/navigation'\nimport { Button } from '@/components/ui/button'\nimport { Input } from '@/components/ui/input'\nimport { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'\nimport Link from 'next/link'\n\nexport default function LoginPage() {\n  const [username, setUsername] = useState('')\n  const [password, setPassword] = useState('')\n  const [error, setError] = useState('')\n  const router = useRouter()\n\n  const handleSubmit = async (e) => {\n    e.preventDefault()\n    // Login logic here\n  }\n\n  return (\n    <div className=\"flex items-center justify-center min-h-screen\">\n      <Card className=\"w-[350px]\">\n        <CardHeader>\n          <CardTitle>Login</CardTitle>\n        </CardHeader>\n        <CardContent>\n          <form onSubmit={handleSubmit} className=\"space-y-4\">\n            {error && <div className=\"text-red-500 text-sm\">{error}</div>}\n            <div className=\"space-y-2\">\n              <Input\n                placeholder=\"Username or Email\"\n                value={username}\n                onChange={(e) => setUsername(e.target.value)}\n                required\n              />\n            </div>\n            <div className=\"space-y-2\">\n              <Input\n                type=\"password\"\n                placeholder=\"Password\"\n                value={password}\n                onChange={(e) => setPassword(e.target.value)}\n                required\n              />\n            </div>\n            <Button type=\"submit\" className=\"w-full\">Login</Button>\n          </form>\n          <div className=\"mt-4 text-center text-sm\">\n            Don't have an account? <Link href=\"/register\" className=\"text-blue-500 hover:underline\">Register</Link>\n          </div>\n        </CardContent>\n      </Card>\n    </div>\n  )\n}\n```\n\nCreate a similar registration page and implement client-side authentication state management using localStorage or cookies for token storage.",
+        "testStrategy": "1. Test Next.js application startup and routing\n2. Verify all pages render correctly without errors\n3. Test responsive design on different screen sizes\n4. Test form validation on login and registration pages\n5. Test client-side authentication state management\n6. Verify navigation between pages\n7. Test that protected routes redirect to login when not authenticated\n8. Verify that TailwindCSS and shadcn/ui components are correctly configured",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Set up Next.js 14+ with App Router architecture",
+            "description": "Initialize a new Next.js 14+ project with App Router architecture and configure the basic project structure.",
+            "dependencies": [],
+            "details": "Create a new Next.js project using 'npx create-next-app@latest' with TypeScript support. Configure the project to use App Router by ensuring the app directory is created. Set up the basic folder structure including app directory with layout.tsx, page.tsx, and globals.css. Configure tsconfig.json and next.config.js with appropriate settings for the project.",
+            "status": "done",
+            "testStrategy": "Verify Next.js application starts without errors. Test basic routing functionality. Ensure TypeScript compilation works correctly. Check that the app directory structure follows Next.js 14 conventions.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:44:32.949Z"
+          },
+          {
+            "id": 2,
+            "title": "Install and configure TailwindCSS and shadcn/ui components",
+            "description": "Set up TailwindCSS with proper configuration and install shadcn/ui component library for the frontend.",
+            "dependencies": [
+              1
+            ],
+            "details": "Install TailwindCSS using 'npm install -D tailwindcss postcss autoprefixer'. Initialize TailwindCSS config with 'npx tailwindcss init -p'. Configure content paths in tailwind.config.js. Set up shadcn/ui by running 'npx shadcn-ui@latest init' and configure the theme. Install required shadcn components (Button, Input, Card) using the CLI. Ensure the components are properly imported and styled in the application.",
+            "status": "done",
+            "testStrategy": "Verify TailwindCSS classes are applied correctly. Test shadcn/ui components render properly with correct styling. Check component customization through the theme configuration. Ensure responsive design works as expected.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:44:32.950Z"
+          },
+          {
+            "id": 3,
+            "title": "Create the basic layout structure with navigation",
+            "description": "Implement the application layout structure including header, navigation bar, and responsive container components.",
+            "dependencies": [
+              2
+            ],
+            "details": "Create a responsive layout structure in app/layout.tsx that includes header, main content area, and footer. Implement a navigation component with links to main sections (Home, Login, Register). Style the navigation using TailwindCSS for both desktop and mobile views. Add a mobile hamburger menu for smaller screens. Ensure the layout is consistent across all pages and properly wraps the page content as shown in the provided example.",
+            "status": "done",
+            "testStrategy": "Test layout rendering on different screen sizes. Verify navigation links work correctly. Test hamburger menu functionality on mobile devices. Ensure consistent styling across different pages. Check accessibility of navigation elements.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:44:32.951Z"
+          },
+          {
+            "id": 4,
+            "title": "Implement authentication pages (login and registration)",
+            "description": "Create the login and registration pages with form validation and submission handling.",
+            "dependencies": [
+              3
+            ],
+            "details": "Implement the login page (app/login/page.tsx) as shown in the example with form validation. Create a similar registration page (app/register/page.tsx) with fields for username, email, password, and password confirmation. Add client-side validation for both forms including email format, password strength, and matching password confirmation. Implement form submission handlers that will connect to the backend API. Add loading states and error handling for form submissions.",
+            "status": "done",
+            "testStrategy": "Test form validation for all fields. Verify error messages display correctly. Test form submission with mock API responses. Check responsive design of forms on different devices. Test navigation between login and registration pages.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:44:32.951Z"
+          },
+          {
+            "id": 5,
+            "title": "Set up client-side authentication state management",
+            "description": "Implement client-side authentication state management using React Context API with localStorage or cookies for token storage.",
+            "dependencies": [
+              4
+            ],
+            "details": "Create an AuthContext using React Context API to manage authentication state globally. Implement functions for login, logout, and registration that store JWT tokens in localStorage or cookies. Add a useAuth hook for components to access authentication state and methods. Create a protected route wrapper component that redirects unauthenticated users to the login page. Implement token refresh logic and session expiration handling. Add persistence of auth state across page refreshes.",
+            "status": "done",
+            "testStrategy": "Test authentication state persistence across page refreshes. Verify protected routes redirect unauthenticated users. Test login, logout, and registration functionality. Check token storage in localStorage or cookies. Test token expiration and refresh logic.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T04:44:32.952Z"
+          }
+        ],
+        "updatedAt": "2025-11-30T04:44:32.952Z"
+      },
+      {
+        "id": "5",
+        "title": "Implement Chat Backend (without RAG)",
+        "description": "Create the chat backend endpoints for sending messages to the OpenAI API and streaming responses back to the client.",
+        "details": "Implement the chat backend with the following components:\n\n1. Create the chat message model and database operations\n2. Implement the OpenAI API integration for chat completions\n3. Create the streaming response handler using FastAPI's StreamingResponse\n4. Implement conversation history storage and retrieval\n5. Create the chat endpoint that handles user messages and streams AI responses\n\n```python\n# chat_service.py\nfrom openai import AsyncOpenAI\nfrom fastapi import HTTPException\nfrom app.models.chat import ChatMessage\nfrom app.database import get_db\nimport uuid\n\nclass ChatService:\n    def __init__(self):\n        self.client = AsyncOpenAI()\n    \n    async def create_message(self, db, user_id, conversation_id, role, content):\n        # Create a new message in the database\n        query = \"\"\"\n        INSERT INTO chat_messages (id, user_id, conversation_id, role, content)\n        VALUES ($1, $2, $3, $4, $5)\n        RETURNING id, user_id, conversation_id, role, content, timestamp\n        \"\"\"\n        message = await db.fetchrow(\n            query, uuid.uuid4(), user_id, conversation_id, role, content\n        )\n        return dict(message)\n    \n    async def get_conversation_history(self, db, user_id, conversation_id, limit=50):\n        # Get conversation history from the database\n        query = \"\"\"\n        SELECT id, user_id, conversation_id, role, content, timestamp\n        FROM chat_messages\n        WHERE user_id = $1 AND conversation_id = $2\n        ORDER BY timestamp ASC\n        LIMIT $3\n        \"\"\"\n        messages = await db.fetch(query, user_id, conversation_id, limit)\n        return [dict(msg) for msg in messages]\n    \n    async def generate_stream(self, messages, model=\"gpt-4o-mini\"):\n        try:\n            response = await self.client.chat.completions.create(\n                model=model,\n                messages=messages,\n                stream=True,\n            )\n            \n            collected_content = \"\"\n            async for chunk in response:\n                if chunk.choices and chunk.choices[0].delta.content:\n                    content = chunk.choices[0].delta.content\n                    collected_content += content\n                    yield content\n            \n            return collected_content\n        except Exception as e:\n            raise HTTPException(status_code=500, detail=str(e))\n```\n\n```python\n# chat.py (API endpoints)\nfrom fastapi import APIRouter, Depends, HTTPException, Request\nfrom fastapi.responses import StreamingResponse\nfrom app.services.chat_service import ChatService\nfrom app.database import get_db\nfrom app.middleware.auth import get_current_user\nimport uuid\n\nrouter = APIRouter()\nchat_service = ChatService()\n\n@router.post(\"/\")\nasync def chat(request: Request, message: ChatRequest, current_user = Depends(get_current_user), db = Depends(get_db)):\n    # Create a new conversation if not provided\n    conversation_id = message.conversation_id or uuid.uuid4()\n    \n    # Save user message to database\n    await chat_service.create_message(\n        db, current_user[\"id\"], conversation_id, \"user\", message.message\n    )\n    \n    # Get conversation history\n    history = await chat_service.get_conversation_history(\n        db, current_user[\"id\"], conversation_id\n    )\n    \n    # Format messages for OpenAI\n    formatted_messages = [\n        {\"role\": msg[\"role\"], \"content\": msg[\"content\"]}\n        for msg in history\n    ]\n    \n    # Create streaming response\n    async def generate():\n        collected_content = \"\"\n        async for content in chat_service.generate_stream(formatted_messages):\n            yield f\"data: {content}\\n\\n\"\n            collected_content += content\n        \n        # Save assistant response to database\n        await chat_service.create_message(\n            db, current_user[\"id\"], conversation_id, \"assistant\", collected_content\n        )\n    \n    return StreamingResponse(\n        generate(),\n        media_type=\"text/event-stream\"\n    )\n\n@router.get(\"/history\")\nasync def get_history(conversation_id: uuid.UUID = None, current_user = Depends(get_current_user), db = Depends(get_db)):\n    # Get all conversations if no conversation_id provided\n    if not conversation_id:\n        # Get distinct conversation IDs\n        # Return list of conversations\n        pass\n    \n    # Get messages for specific conversation\n    messages = await chat_service.get_conversation_history(\n        db, current_user[\"id\"], conversation_id\n    )\n    return {\"messages\": messages}\n```",
+        "testStrategy": "1. Unit tests for chat service methods\n2. Integration tests for chat endpoint with mock OpenAI responses\n3. Test streaming response with various message lengths\n4. Test conversation history retrieval\n5. Test error handling for OpenAI API failures\n6. Test authentication and authorization for chat endpoints\n7. Performance testing with multiple concurrent chat requests\n8. Test handling of long conversations (context management)",
+        "priority": "high",
+        "dependencies": [
+          "1",
+          "2",
+          "3"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create chat message model and database operations",
+            "description": "Implement the database schema and operations for storing and retrieving chat messages.",
+            "dependencies": [],
+            "details": "Create the chat message model with fields for id, user_id, conversation_id, role, content, and timestamp. Implement database operations for creating new messages, retrieving conversation history, and managing conversations. Ensure proper indexing for efficient queries.",
+            "status": "pending",
+            "testStrategy": "Unit test database operations with mock data. Test edge cases like empty conversations and large message histories. Verify proper error handling for database failures.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Implement OpenAI API integration for chat completions",
+            "description": "Create the service to handle communication with OpenAI's API for generating chat completions.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement the ChatService class with methods to initialize the OpenAI client, format messages for the API, and handle the streaming response. Include error handling for API failures, rate limiting, and token limit issues. Support configurable model selection.",
+            "status": "pending",
+            "testStrategy": "Mock OpenAI API responses for testing. Test different model configurations. Verify error handling for various API failure scenarios. Test with different message formats and lengths.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Create streaming response handler using FastAPI",
+            "description": "Implement the streaming response mechanism to send AI-generated content to the client in real-time.",
+            "dependencies": [
+              2
+            ],
+            "details": "Create a streaming response handler using FastAPI's StreamingResponse. Implement the generator function that yields content chunks as they arrive from the OpenAI API. Format the response as server-sent events (SSE) with proper content type headers. Handle connection interruptions gracefully.",
+            "status": "pending",
+            "testStrategy": "Test streaming with mock data of various sizes. Verify correct SSE formatting. Test client disconnection scenarios. Measure performance with different payload sizes.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 4,
+            "title": "Implement conversation history storage and retrieval",
+            "description": "Create the functionality to store and retrieve conversation history for users.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement methods to save both user and assistant messages to the database. Create endpoints to retrieve conversation history with pagination. Add functionality to list all conversations for a user. Implement proper user isolation to ensure users can only access their own conversations.",
+            "status": "pending",
+            "testStrategy": "Test conversation retrieval with various history lengths. Verify user isolation works correctly. Test pagination functionality. Verify conversation metadata is correctly maintained.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 5,
+            "title": "Create chat endpoint for message handling and response streaming",
+            "description": "Implement the main chat API endpoint that processes user messages and streams AI responses.",
+            "dependencies": [
+              3,
+              4
+            ],
+            "details": "Create the /chat endpoint that accepts user messages, saves them to the database, retrieves conversation history, formats messages for the OpenAI API, streams the response back to the client, and saves the assistant's response to the database. Implement proper authentication and error handling. Support conversation management with new and existing conversation IDs.",
+            "status": "pending",
+            "testStrategy": "Integration test the complete chat flow. Test authentication requirements. Verify conversation continuity across multiple messages. Test error scenarios and recovery. Measure end-to-end response times.",
+            "parentId": "undefined"
+          }
+        ],
+        "updatedAt": "2025-11-30T04:50:14.914Z"
+      },
+      {
+        "id": "6",
+        "title": "Implement Chat Frontend with Streaming",
+        "description": "Create the chat interface components with streaming message display, markdown rendering, and code syntax highlighting.",
+        "details": "Implement the chat frontend with the following components:\n\n1. Create the chat interface layout with message list and input\n2. Implement streaming message display using SSE\n3. Add markdown rendering with react-markdown\n4. Implement code syntax highlighting with highlight.js\n5. Create the chat input component with send functionality\n6. Implement chat history display and navigation\n\n```jsx\n// components/chat/ChatInterface.tsx\n'use client'\n\nimport { useState, useEffect, useRef } from 'react'\nimport MessageList from './MessageList'\nimport MessageInput from './MessageInput'\nimport { useRouter } from 'next/navigation'\n\nexport default function ChatInterface() {\n  const [messages, setMessages] = useState([])\n  const [isLoading, setIsLoading] = useState(false)\n  const [conversationId, setConversationId] = useState(null)\n  const router = useRouter()\n  \n  useEffect(() => {\n    // Load conversation history if conversationId exists\n    if (conversationId) {\n      fetchHistory()\n    }\n  }, [conversationId])\n  \n  const fetchHistory = async () => {\n    // Fetch conversation history from API\n  }\n  \n  const handleSendMessage = async (content) => {\n    if (!content.trim()) return\n    \n    // Add user message to state\n    const userMessage = {\n      id: Date.now().toString(),\n      role: 'user',\n      content,\n      timestamp: new Date().toISOString(),\n    }\n    \n    setMessages((prev) => [...prev, userMessage])\n    \n    // Add empty assistant message for streaming\n    const assistantMessageId = (Date.now() + 1).toString()\n    setMessages((prev) => [\n      ...prev,\n      {\n        id: assistantMessageId,\n        role: 'assistant',\n        content: '',\n        timestamp: new Date().toISOString(),\n        isStreaming: true,\n      },\n    ])\n    \n    setIsLoading(true)\n    \n    try {\n      // Send message to API with SSE streaming\n      const response = await fetch('/api/chat', {\n        method: 'POST',\n        headers: {\n          'Content-Type': 'application/json',\n        },\n        body: JSON.stringify({\n          message: content,\n          conversation_id: conversationId,\n        }),\n      })\n      \n      const reader = response.body.getReader()\n      const decoder = new TextDecoder()\n      \n      let assistantContent = ''\n      \n      while (true) {\n        const { done, value } = await reader.read()\n        if (done) break\n        \n        const chunk = decoder.decode(value)\n        assistantContent += chunk\n        \n        // Update assistant message with streaming content\n        setMessages((prev) =>\n          prev.map((msg) =>\n            msg.id === assistantMessageId\n              ? { ...msg, content: assistantContent, isStreaming: false }\n              : msg\n          )\n        )\n      }\n      \n      // Set conversation ID from first message if not already set\n      if (!conversationId && response.headers.get('X-Conversation-Id')) {\n        setConversationId(response.headers.get('X-Conversation-Id'))\n        router.push(`/chat/${response.headers.get('X-Conversation-Id')}`)\n      }\n    } catch (error) {\n      console.error('Error sending message:', error)\n    } finally {\n      setIsLoading(false)\n    }\n  }\n  \n  return (\n    <div className=\"flex flex-col h-screen\">\n      <MessageList messages={messages} />\n      <MessageInput onSendMessage={handleSendMessage} isLoading={isLoading} />\n    </div>\n  )\n}\n```\n\n```jsx\n// components/chat/MessageList.tsx\nimport ReactMarkdown from 'react-markdown'\nimport { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'\nimport { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'\n\nexport default function MessageList({ messages }) {\n  return (\n    <div className=\"flex-1 overflow-y-auto p-4 space-y-4\">\n      {messages.map((message) => (\n        <div\n          key={message.id}\n          className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}\n        >\n          <div\n            className={`max-w-3/4 p-3 rounded-lg ${\n              message.role === 'user'\n                ? 'bg-primary text-primary-foreground'\n                : 'bg-muted'\n            }`}\n          >\n            {message.role === 'assistant' ? (\n              <ReactMarkdown\n                components={{\n                  code({ node, inline, className, children, ...props }) {\n                    const match = /language-(\\w+)/.exec(className || '')\n                    return !inline && match ? (\n                      <SyntaxHighlighter\n                        style={vscDarkPlus}\n                        language={match[1]}\n                        PreTag=\"div\"\n                        {...props}\n                      >\n                        {String(children).replace(/\\n$/, '')}\n                      </SyntaxHighlighter>\n                    ) : (\n                      <code className={className} {...props}>\n                        {children}\n                      </code>\n                    )\n                  },\n                }}\n              >\n                {message.content}\n              </ReactMarkdown>\n            ) : (\n              <div>{message.content}</div>\n            )}\n          </div>\n        </div>\n      ))}\n    </div>\n  )\n}\n```",
+        "testStrategy": "1. Test chat interface rendering with mock messages\n2. Test streaming functionality with mock SSE responses\n3. Test markdown rendering with various markdown elements\n4. Test code syntax highlighting with different languages\n5. Test chat input and message sending\n6. Test error handling for failed API requests\n7. Test responsiveness on different screen sizes\n8. Test accessibility of chat components",
+        "priority": "high",
+        "dependencies": [
+          "4"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Chat Interface Layout and Message List",
+            "description": "Create the basic chat interface layout with a message list component that can display messages with proper styling.",
+            "dependencies": [],
+            "details": "Implement the ChatInterface.tsx component with the basic layout structure and the MessageList.tsx component. The layout should include a flex column structure with message list taking up most of the screen space. The MessageList should render different message types (user/assistant) with appropriate styling and handle empty states.",
+            "status": "pending",
+            "testStrategy": "Test the chat interface rendering with various screen sizes. Verify message list displays user and assistant messages with correct styling. Test empty state and scrolling behavior with many messages.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Implement Message Input Component with Send Functionality",
+            "description": "Create the message input component that allows users to type and send messages, with loading state handling.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement the MessageInput.tsx component with a text input field and send button. Handle input validation, loading states during message sending, and keyboard shortcuts (Enter to send). Connect the input component to the parent ChatInterface component through the onSendMessage callback.",
+            "status": "pending",
+            "testStrategy": "Test input validation for empty messages. Test send button functionality and Enter key shortcut. Verify loading state disables the input appropriately. Test with various input lengths and special characters.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Implement Server-Sent Events (SSE) Streaming for Messages",
+            "description": "Add streaming functionality to display assistant messages as they are generated in real-time using Server-Sent Events.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement the streaming logic in ChatInterface.tsx using the Fetch API with a reader and TextDecoder. Create the message streaming state management to handle partial message content. Update the UI to show typing indicators during streaming and handle stream completion. Implement error handling for stream interruptions.",
+            "status": "pending",
+            "testStrategy": "Test streaming with mock SSE responses of various lengths. Test error handling during streaming. Verify UI updates correctly as new chunks arrive. Test performance with long streaming responses.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 4,
+            "title": "Add Markdown Rendering with Code Syntax Highlighting",
+            "description": "Implement markdown rendering for assistant messages with code syntax highlighting for code blocks.",
+            "dependencies": [
+              1,
+              3
+            ],
+            "details": "Integrate react-markdown for rendering markdown content in assistant messages. Configure the SyntaxHighlighter component from react-syntax-highlighter to handle code blocks with proper language detection. Style the markdown elements (headings, lists, links, etc.) to match the application design. Ensure code blocks are properly formatted with the vscDarkPlus theme.",
+            "status": "pending",
+            "testStrategy": "Test markdown rendering with various markdown elements (headings, lists, tables, links). Test code syntax highlighting with different programming languages. Verify proper styling and formatting of complex markdown content.",
+            "parentId": "undefined"
+          },
+          {
+            "id": 5,
+            "title": "Implement Chat History and Conversation Management",
+            "description": "Add functionality to load, display, and navigate between chat conversations with persistent history.",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "details": "Implement the conversation ID management and history fetching in ChatInterface.tsx. Create the fetchHistory function to retrieve conversation history from the API. Add URL-based navigation using Next.js router to load specific conversations. Implement conversation state management to handle new and existing conversations. Add UI elements for conversation navigation and history display.",
+            "status": "pending",
+            "testStrategy": "Test conversation history loading with valid and invalid conversation IDs. Test URL-based navigation between conversations. Verify new conversations are created correctly. Test persistence of messages across page refreshes.",
+            "parentId": "undefined"
+          }
+        ],
+        "updatedAt": "2025-11-30T04:58:23.434Z"
+      },
+      {
+        "id": "7",
+        "title": "Implement Document Upload and Processing Backend",
+        "description": "Create the backend endpoints and services for document upload, text extraction, chunking, and embedding generation.",
+        "details": "Implement the document upload and processing backend with the following components:\n\n1. Create the document model and database operations\n2. Implement file upload endpoint with multipart handling\n3. Create text extraction service for different file types (PDF, TXT, MD, DOCX)\n4. Implement text chunking using LangChain's RecursiveCharacterTextSplitter\n5. Create embedding generation service using OpenAI embeddings\n6. Implement FAISS index creation and management\n\n```python\n# document_service.py\nimport os\nimport uuid\nfrom fastapi import UploadFile, HTTPException\nfrom langchain.text_splitter import RecursiveCharacterTextSplitter\nfrom langchain_openai import OpenAIEmbeddings\nfrom langchain_community.vectorstores import FAISS\nfrom app.config import settings\nfrom app.utils.text_extractor import extract_text_from_file\n\nclass DocumentService:\n    def __init__(self):\n        self.embeddings = OpenAIEmbeddings(model=\"text-embedding-3-small\")\n        self.text_splitter = RecursiveCharacterTextSplitter(\n            chunk_size=1000,\n            chunk_overlap=200,\n            length_function=len,\n        )\n    \n    async def save_document_metadata(self, db, user_id, filename, file_path, file_type, file_size, chunk_count):\n        # Save document metadata to database\n        query = \"\"\"\n        INSERT INTO documents (id, user_id, filename, file_path, file_type, file_size, chunk_count, metadata)\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n        RETURNING id\n        \"\"\"\n        document_id = await db.fetchval(\n            query, \n            uuid.uuid4(), \n            user_id, \n            filename, \n            file_path, \n            file_type, \n            file_size, \n            chunk_count,\n            {\"processed\": True}\n        )\n        return document_id\n    \n    async def process_document(self, file: UploadFile, user_id: str, db):\n        # Create upload directory if it doesn't exist\n        os.makedirs(settings.UPLOAD_FOLDER, exist_ok=True)\n        os.makedirs(settings.FAISS_INDEX_FOLDER, exist_ok=True)\n        \n        # Generate unique filename\n        file_extension = os.path.splitext(file.filename)[1].lower()\n        unique_filename = f\"{uuid.uuid4()}{file_extension}\"\n        file_path = os.path.join(settings.UPLOAD_FOLDER, unique_filename)\n        \n        # Save file to disk\n        with open(file_path, \"wb\") as f:\n            content = await file.read()\n            f.write(content)\n            file_size = len(content)\n        \n        # Extract text from file\n        text = extract_text_from_file(file_path, file_extension)\n        if not text:\n            raise HTTPException(status_code=400, detail=\"Could not extract text from file\")\n        \n        # Split text into chunks\n        chunks = self.text_splitter.split_text(text)\n        \n        # Create document metadata\n        document_id = await self.save_document_metadata(\n            db, \n            user_id, \n            file.filename, \n            file_path, \n            file_extension[1:],  # Remove the dot\n            file_size,\n            len(chunks)\n        )\n        \n        # Create metadata for each chunk\n        metadatas = [\n            {\n                \"document_id\": str(document_id),\n                \"chunk_index\": i,\n                \"text\": chunk[:100] + \"...\",  # Preview\n                \"user_id\": user_id\n            }\n            for i, chunk in enumerate(chunks)\n        ]\n        \n        # Create or update FAISS index\n        user_index_path = os.path.join(settings.FAISS_INDEX_FOLDER, f\"user_{user_id}.faiss\")\n        \n        if os.path.exists(user_index_path):\n            # Load existing index and add new documents\n            vectorstore = FAISS.load_local(user_index_path, self.embeddings)\n            vectorstore.add_texts(chunks, metadatas)\n        else:\n            # Create new index\n            vectorstore = FAISS.from_texts(chunks, self.embeddings, metadatas=metadatas)\n        \n        # Save index\n        vectorstore.save_local(user_index_path)\n        \n        return {\n            \"document_id\": document_id,\n            \"filename\": file.filename,\n            \"chunk_count\": len(chunks),\n            \"status\": \"processed\"\n        }\n    \n    async def get_user_documents(self, db, user_id):\n        # Get all documents for a user\n        query = \"\"\"\n        SELECT id, filename, file_type, file_size, chunk_count, uploaded_at\n        FROM documents\n        WHERE user_id = $1\n        ORDER BY uploaded_at DESC\n        \"\"\"\n        documents = await db.fetch(query, user_id)\n        return [dict(doc) for doc in documents]\n```\n\n```python\n# documents.py (API endpoints)\nfrom fastapi import APIRouter, Depends, UploadFile, File, HTTPException\nfrom app.services.document_service import DocumentService\nfrom app.database import get_db\nfrom app.middleware.auth import get_current_user\n\nrouter = APIRouter()\ndocument_service = DocumentService()\n\n@router.post(\"/upload\")\nasync def upload_document(\n    file: UploadFile = File(...),\n    current_user = Depends(get_current_user),\n    db = Depends(get_db)\n):\n    # Validate file type\n    allowed_extensions = [\".pdf\", \".txt\", \".md\", \".docx\"]\n    file_extension = os.path.splitext(file.filename)[1].lower()\n    \n    if file_extension not in allowed_extensions:\n        raise HTTPException(\n            status_code=400,\n            detail=f\"Unsupported file type. Allowed types: {', '.join(allowed_extensions)}\"\n        )\n    \n    # Process document\n    result = await document_service.process_document(file, current_user[\"id\"], db)\n    return result\n\n@router.get(\"/\")\nasync def get_documents(current_user = Depends(get_current_user), db = Depends(get_db)):\n    documents = await document_service.get_user_documents(db, current_user[\"id\"])\n    return {\"documents\": documents}\n```",
+        "testStrategy": "1. Test file upload with different file types (PDF, TXT, MD, DOCX)\n2. Test text extraction from different file formats\n3. Test chunking with different text lengths and structures\n4. Test embedding generation and FAISS index creation\n5. Test document metadata storage in PostgreSQL\n6. Test error handling for invalid file types and extraction failures\n7. Test performance with large documents\n8. Test user isolation (users can only access their own documents)",
+        "priority": "medium",
+        "dependencies": [
+          "1",
+          "2",
+          "3"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create Document Model and Database Operations",
+            "description": "Implement the document model and database operations for storing document metadata and managing document records.",
+            "dependencies": [],
+            "details": "Create the document model with fields for id, user_id, filename, file_path, file_type, file_size, chunk_count, and metadata. Implement database operations for saving document metadata, retrieving user documents, and managing document records. This includes SQL queries for inserting new documents and fetching document lists for specific users.",
+            "status": "done",
+            "testStrategy": "Unit test database operations with mock data. Test document creation with various metadata. Test retrieval operations with filtering. Verify proper error handling for database failures.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:04:02.049Z"
+          },
+          {
+            "id": 2,
+            "title": "Implement File Upload Endpoint with Multipart Handling",
+            "description": "Create the API endpoint for document uploads with proper multipart form handling and file validation.",
+            "dependencies": [
+              1
+            ],
+            "details": "Implement the '/upload' endpoint using FastAPI's File and UploadFile dependencies. Add file type validation for allowed extensions (.pdf, .txt, .md, .docx). Create the file saving logic with unique filename generation using UUID. Implement proper error handling for invalid files and upload failures. Connect the endpoint to the document service for further processing.",
+            "status": "done",
+            "testStrategy": "Test file upload with various file types. Test validation of allowed and disallowed file extensions. Test error handling for oversized files. Verify proper authentication and authorization checks.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:04:02.050Z"
+          },
+          {
+            "id": 3,
+            "title": "Create Text Extraction Service for Multiple File Types",
+            "description": "Implement the text extraction service that can handle different file formats including PDF, TXT, MD, and DOCX.",
+            "dependencies": [
+              2
+            ],
+            "details": "Create the text_extractor.py utility with functions to extract text from different file types. Implement PDF extraction using a library like PyPDF2 or pdfplumber. Add plain text extraction for TXT files. Implement markdown parsing for MD files. Add DOCX extraction using python-docx. Create a unified interface that detects file type and routes to the appropriate extraction method.",
+            "status": "done",
+            "testStrategy": "Test extraction with sample files of each supported type. Verify correct text extraction from complex documents. Test error handling for corrupted files. Benchmark performance with large documents.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:04:02.052Z"
+          },
+          {
+            "id": 4,
+            "title": "Implement Text Chunking with RecursiveCharacterTextSplitter",
+            "description": "Create the text chunking functionality using LangChain's RecursiveCharacterTextSplitter to divide documents into manageable chunks.",
+            "dependencies": [
+              3
+            ],
+            "details": "Implement text chunking using LangChain's RecursiveCharacterTextSplitter with appropriate chunk size (1000) and overlap (200) parameters. Configure the splitter to maintain context across chunks. Create metadata for each chunk including document_id, chunk_index, and preview text. Ensure the chunking process handles various document structures and maintains semantic coherence where possible.",
+            "status": "done",
+            "testStrategy": "Test chunking with various text lengths and structures. Verify chunk size and overlap parameters work as expected. Test with documents containing special characters and formatting. Measure chunking performance with large documents.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:04:02.052Z"
+          },
+          {
+            "id": 5,
+            "title": "Implement Embedding Generation and FAISS Index Management",
+            "description": "Create the embedding generation service using OpenAI embeddings and implement FAISS vector store creation and management.",
+            "dependencies": [
+              4
+            ],
+            "details": "Implement the OpenAI embedding generation using the text-embedding-3-small model. Create the FAISS index management functionality for storing and retrieving vector embeddings. Implement user-specific index paths to isolate user data. Add logic to either create new indices or update existing ones when processing documents. Implement proper saving and loading of FAISS indices to/from disk. Ensure proper metadata is stored with each embedding for retrieval context.",
+            "status": "done",
+            "testStrategy": "Test embedding generation with various text inputs. Verify FAISS index creation and updating. Test retrieval accuracy with sample queries. Benchmark performance with large indices. Test index persistence across application restarts.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:04:02.053Z"
+          }
+        ],
+        "updatedAt": "2025-11-30T06:04:02.053Z"
+      },
+      {
+        "id": "8",
+        "title": "Implement Document Upload Frontend",
+        "description": "Create the frontend components for document upload, progress indication, and document management.",
+        "details": "Implement the document upload frontend with the following components:\n\n1. Create the document upload form with drag-and-drop functionality\n2. Implement file type validation and error handling\n3. Add upload progress indicator\n4. Create document list component to display uploaded documents\n5. Implement document management (view details, delete)\n\n```jsx\n// components/documents/DocumentUpload.tsx\n'use client'\n\nimport { useState, useRef } from 'react'\nimport { Button } from '@/components/ui/button'\nimport { Progress } from '@/components/ui/progress'\nimport { Alert, AlertDescription } from '@/components/ui/alert'\nimport { Upload, File, X } from 'lucide-react'\n\nexport default function DocumentUpload({ onUploadComplete }) {\n  const [file, setFile] = useState(null)\n  const [uploading, setUploading] = useState(false)\n  const [progress, setProgress] = useState(0)\n  const [error, setError] = useState('')\n  const fileInputRef = useRef(null)\n  \n  const handleFileChange = (e) => {\n    const selectedFile = e.target.files[0]\n    validateAndSetFile(selectedFile)\n  }\n  \n  const validateAndSetFile = (selectedFile) => {\n    if (!selectedFile) return\n    \n    const allowedTypes = ['.pdf', '.txt', '.md', '.docx']\n    const fileExtension = selectedFile.name.substring(selectedFile.name.lastIndexOf('.')).toLowerCase()\n    \n    if (!allowedTypes.includes(fileExtension)) {\n      setError(`Unsupported file type. Allowed types: ${allowedTypes.join(', ')}`)\n      return\n    }\n    \n    setFile(selectedFile)\n    setError('')\n  }\n  \n  const handleDrop = (e) => {\n    e.preventDefault()\n    const droppedFile = e.dataTransfer.files[0]\n    validateAndSetFile(droppedFile)\n  }\n  \n  const handleDragOver = (e) => {\n    e.preventDefault()\n  }\n  \n  const handleUpload = async () => {\n    if (!file) return\n    \n    setUploading(true)\n    setProgress(0)\n    \n    const formData = new FormData()\n    formData.append('file', file)\n    \n    try {\n      const xhr = new XMLHttpRequest()\n      \n      xhr.upload.addEventListener('progress', (event) => {\n        if (event.lengthComputable) {\n          const percentComplete = Math.round((event.loaded / event.total) * 100)\n          setProgress(percentComplete)\n        }\n      })\n      \n      xhr.onload = function () {\n        if (xhr.status === 200) {\n          const response = JSON.parse(xhr.responseText)\n          setFile(null)\n          if (onUploadComplete) onUploadComplete(response)\n        } else {\n          setError('Upload failed: ' + xhr.statusText)\n        }\n        setUploading(false)\n      }\n      \n      xhr.onerror = function () {\n        setError('Upload failed. Please try again.')\n        setUploading(false)\n      }\n      \n      xhr.open('POST', '/api/documents/upload', true)\n      xhr.send(formData)\n    } catch (err) {\n      setError('Upload failed: ' + err.message)\n      setUploading(false)\n    }\n  }\n  \n  const clearFile = () => {\n    setFile(null)\n    setError('')\n  }\n  \n  return (\n    <div className=\"space-y-4\">\n      {error && (\n        <Alert variant=\"destructive\">\n          <AlertDescription>{error}</AlertDescription>\n        </Alert>\n      )}\n      \n      <div\n        className={`border-2 border-dashed rounded-lg p-8 text-center ${file ? 'border-primary' : 'border-muted-foreground'}`}\n        onDrop={handleDrop}\n        onDragOver={handleDragOver}\n        onClick={() => fileInputRef.current?.click()}\n      >\n        {!file ? (\n          <div className=\"flex flex-col items-center justify-center space-y-2\">\n            <Upload className=\"h-8 w-8 text-muted-foreground\" />\n            <p>Drag and drop a file or click to browse</p>\n            <p className=\"text-sm text-muted-foreground\">\n              Supported formats: PDF, TXT, MD, DOCX\n            </p>\n          </div>\n        ) : (\n          <div className=\"flex items-center justify-between\">\n            <div className=\"flex items-center space-x-2\">\n              <File className=\"h-6 w-6\" />\n              <span>{file.name}</span>\n            </div>\n            <Button\n              variant=\"ghost\"\n              size=\"icon\"\n              onClick={(e) => {\n                e.stopPropagation()\n                clearFile()\n              }}\n            >\n              <X className=\"h-4 w-4\" />\n            </Button>\n          </div>\n        )}\n        <input\n          type=\"file\"\n          ref={fileInputRef}\n          onChange={handleFileChange}\n          className=\"hidden\"\n          accept=\".pdf,.txt,.md,.docx\"\n        />\n      </div>\n      \n      {file && (\n        <div className=\"space-y-2\">\n          {uploading && (\n            <Progress value={progress} className=\"h-2\" />\n          )}\n          <Button\n            onClick={handleUpload}\n            disabled={uploading}\n            className=\"w-full\"\n          >\n            {uploading ? `Uploading (${progress}%)` : 'Upload Document'}\n          </Button>\n        </div>\n      )}\n    </div>\n  )\n}\n```\n\n```jsx\n// components/documents/DocumentList.tsx\n'use client'\n\nimport { useEffect, useState } from 'react'\nimport { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'\nimport { Button } from '@/components/ui/button'\nimport { Trash2 } from 'lucide-react'\n\nexport default function DocumentList() {\n  const [documents, setDocuments] = useState([])\n  const [loading, setLoading] = useState(true)\n  const [error, setError] = useState('')\n  \n  useEffect(() => {\n    fetchDocuments()\n  }, [])\n  \n  const fetchDocuments = async () => {\n    try {\n      setLoading(true)\n      const response = await fetch('/api/documents')\n      if (!response.ok) throw new Error('Failed to fetch documents')\n      \n      const data = await response.json()\n      setDocuments(data.documents)\n    } catch (err) {\n      setError(err.message)\n    } finally {\n      setLoading(false)\n    }\n  }\n  \n  const formatFileSize = (bytes) => {\n    if (bytes < 1024) return bytes + ' bytes'\n    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'\n    else return (bytes / 1048576).toFixed(1) + ' MB'\n  }\n  \n  const formatDate = (dateString) => {\n    return new Date(dateString).toLocaleString()\n  }\n  \n  return (\n    <div className=\"space-y-4\">\n      <h2 className=\"text-xl font-bold\">Your Documents</h2>\n      \n      {loading ? (\n        <p>Loading documents...</p>\n      ) : error ? (\n        <Alert variant=\"destructive\">\n          <AlertDescription>{error}</AlertDescription>\n        </Alert>\n      ) : documents.length === 0 ? (\n        <p>No documents uploaded yet.</p>\n      ) : (\n        <div className=\"grid gap-4 md:grid-cols-2 lg:grid-cols-3\">\n          {documents.map((doc) => (\n            <Card key={doc.id}>\n              <CardHeader className=\"pb-2\">\n                <div className=\"flex justify-between items-start\">\n                  <CardTitle className=\"text-base truncate\">{doc.filename}</CardTitle>\n                  <Button variant=\"ghost\" size=\"icon\" className=\"h-6 w-6\">\n                    <Trash2 className=\"h-4 w-4\" />\n                  </Button>\n                </div>\n              </CardHeader>\n              <CardContent>\n                <div className=\"text-sm space-y-1\">\n                  <p>Type: {doc.file_type.toUpperCase()}</p>\n                  <p>Size: {formatFileSize(doc.file_size)}</p>\n                  <p>Chunks: {doc.chunk_count}</p>\n                  <p className=\"text-xs text-muted-foreground\">\n                    Uploaded: {formatDate(doc.uploaded_at)}\n                  </p>\n                </div>\n              </CardContent>\n            </Card>\n          ))}\n        </div>\n      )}\n    </div>\n  )\n}\n```",
+        "testStrategy": "1. Test file upload with valid and invalid file types\n2. Test drag-and-drop functionality\n3. Test upload progress indication\n4. Test error handling for upload failures\n5. Test document list rendering with mock data\n6. Test document deletion functionality\n7. Test responsive layout on different screen sizes\n8. Test accessibility of upload and document list components",
+        "priority": "medium",
+        "dependencies": [
+          "4"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Document Upload Form with Drag-and-Drop",
+            "description": "Create the document upload form component with drag-and-drop functionality and file input handling.",
+            "dependencies": [],
+            "details": "Implement the DocumentUpload.tsx component with the following features: drag-and-drop zone, file input reference, event handlers for file selection, and basic UI elements. Ensure the component accepts file input both through clicking and dragging files. Include proper styling for the upload area with visual feedback when files are dragged over.",
+            "status": "done",
+            "testStrategy": "Test drag-and-drop functionality with various file types. Verify the UI updates correctly when files are selected. Test accessibility of the file input through keyboard navigation.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:15:43.102Z"
+          },
+          {
+            "id": 2,
+            "title": "Add File Validation and Error Handling",
+            "description": "Implement file type validation and error handling for the document upload component.",
+            "dependencies": [
+              1
+            ],
+            "details": "Extend the DocumentUpload component to validate file types (PDF, TXT, MD, DOCX) before accepting them. Display appropriate error messages when invalid files are selected. Implement the validateAndSetFile function to check file extensions and show validation errors. Add an Alert component to display error messages to the user.",
+            "status": "done",
+            "testStrategy": "Test validation with valid and invalid file types. Verify error messages are displayed correctly. Test edge cases like empty files or files with no extension.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:15:43.103Z"
+          },
+          {
+            "id": 3,
+            "title": "Implement Upload Progress Indicator",
+            "description": "Add upload progress tracking and visual progress indicator for document uploads.",
+            "dependencies": [
+              2
+            ],
+            "details": "Implement the upload functionality with progress tracking using XMLHttpRequest. Create state variables for tracking upload progress and uploading status. Add the Progress component to visually display upload progress. Implement the handleUpload function to send files to the server and track progress events. Handle success and error responses from the server.",
+            "status": "done",
+            "testStrategy": "Test upload progress with files of different sizes. Verify progress indicator updates correctly. Test error handling during upload failures. Test cancellation of uploads.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:15:43.105Z"
+          },
+          {
+            "id": 4,
+            "title": "Create Document List Component",
+            "description": "Implement the DocumentList component to display uploaded documents with metadata.",
+            "dependencies": [
+              3
+            ],
+            "details": "Create the DocumentList.tsx component to fetch and display the user's uploaded documents. Implement the fetchDocuments function to retrieve documents from the API. Create card components to display document metadata (filename, type, size, chunks, upload date). Add loading states and empty state handling. Implement utility functions for formatting file sizes and dates.",
+            "status": "done",
+            "testStrategy": "Test document list rendering with mock data. Verify loading states display correctly. Test empty state handling. Test responsive layout on different screen sizes. Test date and file size formatting.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:15:43.106Z"
+          },
+          {
+            "id": 5,
+            "title": "Implement Document Management Functions",
+            "description": "Add document management functionality including viewing details and deleting documents.",
+            "dependencies": [
+              4
+            ],
+            "details": "Extend the DocumentList component with document management features. Implement the delete document functionality with confirmation dialog. Add a document details view to show additional metadata. Connect the DocumentUpload and DocumentList components to refresh the list after successful uploads. Implement error handling for document management operations. Add success notifications for completed operations.",
+            "status": "done",
+            "testStrategy": "Test document deletion with confirmation. Verify list updates after deletion. Test error handling during deletion failures. Test document details view rendering. Test integration between upload and list components.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:15:43.107Z"
+          }
+        ],
+        "updatedAt": "2025-11-30T06:15:43.107Z"
+      },
+      {
+        "id": "9",
+        "title": "Implement RAG Retrieval Module",
+        "description": "Create the RAG retrieval module for querying the FAISS index and retrieving relevant document chunks based on user queries.",
+        "details": "Implement the RAG retrieval module with the following components:\n\n1. Create the RAG service for querying the FAISS index\n2. Implement user-specific document filtering\n3. Create the query embedding generation\n4. Implement top-k retrieval with metadata\n5. Create the RAG query endpoint for testing\n\n```python\n# rag_service.py\nimport os\nfrom langchain_openai import OpenAIEmbeddings\nfrom langchain_community.vectorstores import FAISS\nfrom app.config import settings\n\nclass RAGService:\n    def __init__(self):\n        self.embeddings = OpenAIEmbeddings(model=\"text-embedding-3-small\")\n    \n    async def load_user_index(self, user_id):\n        # Load user's FAISS index\n        user_index_path = os.path.join(settings.FAISS_INDEX_FOLDER, f\"user_{user_id}.faiss\")\n        \n        if not os.path.exists(user_index_path):\n            return None\n        \n        return FAISS.load_local(user_index_path, self.embeddings)\n    \n    async def query_documents(self, user_id, query_text, top_k=3):\n        # Load user's index\n        vectorstore = await self.load_user_index(user_id)\n        \n        if not vectorstore:\n            return []\n        \n        # Query the index\n        results = vectorstore.similarity_search_with_score(\n            query_text,\n            k=top_k,\n            filter={\"user_id\": user_id}  # Ensure user can only access their documents\n        )\n        \n        # Format results\n        formatted_results = []\n        for doc, score in results:\n            formatted_results.append({\n                \"text\": doc.page_content,\n                \"metadata\": doc.metadata,\n                \"relevance_score\": float(score),\n            })\n        \n        return formatted_results\n```\n\n```python\n# rag.py (API endpoints)\nfrom fastapi import APIRouter, Depends, HTTPException\nfrom app.services.rag_service import RAGService\nfrom app.middleware.auth import get_current_user\nfrom pydantic import BaseModel\n\nclass QueryRequest(BaseModel):\n    query: str\n    top_k: int = 3\n\nrouter = APIRouter()\nrag_service = RAGService()\n\n@router.post(\"/query\")\nasync def query_rag(request: QueryRequest, current_user = Depends(get_current_user)):\n    if not request.query.strip():\n        raise HTTPException(status_code=400, detail=\"Query cannot be empty\")\n    \n    results = await rag_service.query_documents(\n        current_user[\"id\"],\n        request.query,\n        request.top_k\n    )\n    \n    return {\"results\": results}\n```",
+        "testStrategy": "1. Test FAISS index loading with valid and invalid user IDs\n2. Test query embedding generation\n3. Test document retrieval with various queries\n4. Test top-k parameter with different values\n5. Test user isolation (users can only query their own documents)\n6. Test performance with large indices\n7. Test error handling for missing indices\n8. Test relevance scoring and result ranking",
+        "priority": "medium",
+        "dependencies": [
+          "7"
+        ],
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement RAG Service Class with FAISS Index Loading",
+            "description": "Create the RAGService class with initialization and methods to load user-specific FAISS indices.",
+            "dependencies": [],
+            "details": "Implement the RAGService class with OpenAI embeddings initialization. Create the load_user_index method that loads a user's FAISS index from the file system based on user ID. Include proper error handling for missing indices and implement the basic service structure.",
+            "status": "done",
+            "testStrategy": "Test FAISS index loading with valid user IDs, test handling of non-existent indices, test initialization with different embedding models, verify proper path construction for user indices.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:17:27.170Z"
+          },
+          {
+            "id": 2,
+            "title": "Implement Query Embedding Generation",
+            "description": "Create functionality to generate embeddings for user queries using the OpenAI embeddings model.",
+            "dependencies": [
+              1
+            ],
+            "details": "Extend the RAGService to handle query embedding generation. Ensure the embedding model is properly utilized to convert text queries into vector representations. Implement caching if appropriate to improve performance for repeated queries. Handle potential API errors when generating embeddings.",
+            "status": "done",
+            "testStrategy": "Test embedding generation with various query types, test error handling for API failures, benchmark embedding generation performance, verify embedding dimensions match expectations.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:17:27.171Z"
+          },
+          {
+            "id": 3,
+            "title": "Implement Document Retrieval with User Filtering",
+            "description": "Create the query_documents method to retrieve relevant documents with user-specific filtering and relevance scoring.",
+            "dependencies": [
+              1,
+              2
+            ],
+            "details": "Implement the query_documents method that performs similarity search on the FAISS index with user filtering. Include top-k parameter functionality to limit results. Format the results with document content, metadata, and relevance scores. Ensure user isolation by filtering results to only include documents owned by the requesting user.",
+            "status": "done",
+            "testStrategy": "Test retrieval with various k values, test user isolation (users can only access their documents), test relevance scoring accuracy, test with various query complexities, test performance with large document collections.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:17:27.173Z"
+          },
+          {
+            "id": 4,
+            "title": "Create RAG API Router and Request Models",
+            "description": "Implement the FastAPI router and Pydantic models for the RAG query endpoint.",
+            "dependencies": [
+              1
+            ],
+            "details": "Create the FastAPI router for RAG functionality. Implement the QueryRequest Pydantic model with validation for query parameters. Set up the router with proper prefix and tags. Initialize the RAGService instance for use in the endpoints. Ensure proper request validation and error handling.",
+            "status": "done",
+            "testStrategy": "Test request validation with valid and invalid inputs, test router configuration, verify proper dependency injection for authentication, test error responses for invalid requests.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:17:27.174Z"
+          },
+          {
+            "id": 5,
+            "title": "Implement RAG Query Endpoint with Authentication",
+            "description": "Create the /query endpoint that authenticates users and returns relevant document chunks based on their queries.",
+            "dependencies": [
+              3,
+              4
+            ],
+            "details": "Implement the query_rag endpoint that accepts user queries, authenticates the user, validates the request, and returns relevant document chunks. Include proper error handling for empty queries, authentication failures, and service errors. Ensure the endpoint correctly uses the RAGService to retrieve and return formatted results.",
+            "status": "done",
+            "testStrategy": "Test endpoint with authenticated and unauthenticated requests, test with various query parameters, test error handling for service failures, test response format and structure, test performance under load, verify proper user isolation in results.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:17:27.174Z"
+          }
+        ],
+        "updatedAt": "2025-11-30T06:17:27.174Z"
+      },
+      {
+        "id": "10",
+        "title": "Integrate RAG with Chat System",
+        "description": "Integrate the RAG retrieval module with the chat system to provide document-aware responses.",
+        "details": "Integrate RAG with the chat system with the following components:\n\n1. Modify the chat service to incorporate RAG retrieval\n2. Update the chat endpoint to use RAG context\n3. Implement context injection into OpenAI prompts\n4. Create a system message that instructs the model to use the retrieved context\n5. Update the frontend to indicate when responses are using document context\n\n```python\n# Updated chat_service.py\nfrom app.services.rag_service import RAGService\n\nclass ChatService:\n    def __init__(self):\n        self.client = AsyncOpenAI()\n        self.rag_service = RAGService()\n    \n    # ... existing methods ...\n    \n    async def generate_response_with_rag(self, user_id, query, conversation_history, model=\"gpt-4o-mini\"):\n        # Retrieve relevant documents\n        rag_results = await self.rag_service.query_documents(user_id, query, top_k=3)\n        \n        # Format conversation history\n        formatted_messages = [\n            {\"role\": \"system\", \"content\": self._create_system_message(rag_results)}\n        ]\n        \n        # Add conversation history\n        for msg in conversation_history:\n            formatted_messages.append({\"role\": msg[\"role\"], \"content\": msg[\"content\"]})\n        \n        # Generate streaming response\n        return self.generate_stream(formatted_messages, model)\n    \n    def _create_system_message(self, rag_results):\n        if not rag_results:\n            return \"You are a helpful assistant. Respond concisely and accurately to the user's questions.\"\n        \n        context_str = \"\\n\\n\".join([result[\"text\"] for result in rag_results])\n        \n        return f\"\"\"You are a helpful assistant with access to the following documents. \n        Use this information to answer the user's questions accurately and cite the source when possible.\n        If the documents don't contain relevant information, just answer based on your knowledge but make it clear \n        you're not using the document context.\n        \n        DOCUMENT CONTEXT:\n        {context_str}\n        \n        Answer the user's questions based on the above context.\"\"\"\n```\n\n```python\n# Updated chat.py endpoint\n@router.post(\"/\")\nasync def chat(request: Request, message: ChatRequest, current_user = Depends(get_current_user), db = Depends(get_db)):\n    # Create a new conversation if not provided\n    conversation_id = message.conversation_id or uuid.uuid4()\n    \n    # Save user message to database\n    await chat_service.create_message(\n        db, current_user[\"id\"], conversation_id, \"user\", message.message\n    )\n    \n    # Get conversation history\n    history = await chat_service.get_conversation_history(\n        db, current_user[\"id\"], conversation_id\n    )\n    \n    # Create streaming response with RAG\n    async def generate():\n        collected_content = \"\"\n        async for content in chat_service.generate_response_with_rag(\n            current_user[\"id\"], message.message, history\n        ):\n            yield f\"data: {content}\\n\\n\"\n            collected_content += content\n        \n        # Save assistant response to database\n        await chat_service.create_message(\n            db, current_user[\"id\"], conversation_id, \"assistant\", collected_content\n        )\n    \n    return StreamingResponse(\n        generate(),\n        media_type=\"text/event-stream\",\n        headers={\"X-Conversation-Id\": str(conversation_id)}\n    )\n```\n\nUpdate the frontend to handle RAG-enhanced responses:\n\n```jsx\n// Updated ChatInterface.tsx\n// Add a state to track whether documents are available\nconst [hasDocuments, setHasDocuments] = useState(false)\n\n// Add a function to check if user has documents\nconst checkUserDocuments = async () => {\n  try {\n    const response = await fetch('/api/documents')\n    if (response.ok) {\n      const data = await response.json()\n      setHasDocuments(data.documents.length > 0)\n    }\n  } catch (error) {\n    console.error('Error checking documents:', error)\n  }\n}\n\n// Call this function on component mount\nuseEffect(() => {\n  checkUserDocuments()\n}, [])\n\n// Add a document context indicator in the UI\n{!hasDocuments && (\n  <div className=\"p-2 bg-amber-50 text-amber-800 rounded-md mb-4\">\n    <p className=\"text-sm\">Upload documents to enable document-aware responses.</p>\n  </div>\n)}\n```",
+        "testStrategy": "1. Test RAG integration with chat by querying about uploaded documents\n2. Test system message generation with and without RAG results\n3. Test conversation flow with document context\n4. Test handling of queries that don't match any documents\n5. Test context injection with various document types\n6. Test user isolation in RAG-enhanced chat\n7. Test performance with multiple documents and long conversations\n8. Test frontend indicators for document-aware responses",
+        "priority": "high",
+        "dependencies": [
+          "5",
+          "9"
+        ],
+        "status": "in-progress",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Modify ChatService to incorporate RAG retrieval",
+            "description": "Update the ChatService class to integrate with RAGService for retrieving relevant documents based on user queries.",
+            "dependencies": [],
+            "details": "Implement the generate_response_with_rag method in ChatService that retrieves relevant documents using RAGService, formats conversation history with document context, and generates streaming responses. Also implement the _create_system_message helper method to format retrieved documents into a system prompt.",
+            "status": "done",
+            "testStrategy": "Test the generate_response_with_rag method with various queries, verify correct document retrieval, test system message generation with and without RAG results, and ensure proper integration with OpenAI API.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:18:53.353Z"
+          },
+          {
+            "id": 2,
+            "title": "Update chat endpoint to use RAG context",
+            "description": "Modify the chat endpoint to use the new RAG-enhanced response generation instead of the standard chat completion.",
+            "dependencies": [
+              1
+            ],
+            "details": "Update the chat endpoint in chat.py to use the generate_response_with_rag method from ChatService. Ensure the streaming response correctly handles the RAG-enhanced content and properly saves the conversation history to the database. Update the endpoint to include any necessary metadata about document usage in the response headers.",
+            "status": "done",
+            "testStrategy": "Test the endpoint with various user queries, verify streaming responses work correctly, test conversation history is properly saved, and ensure proper error handling when RAG service is unavailable.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:18:53.354Z"
+          },
+          {
+            "id": 3,
+            "title": "Implement document availability check in frontend",
+            "description": "Create functionality to check if a user has uploaded documents and display appropriate UI indicators.",
+            "dependencies": [
+              2
+            ],
+            "details": "Implement the checkUserDocuments function in the frontend to query the /api/documents endpoint and determine if the user has uploaded any documents. Set up state management to track document availability and display appropriate UI indicators to inform users about document-aware capabilities.",
+            "status": "done",
+            "testStrategy": "Test document availability check on component mount, verify UI indicators display correctly based on document availability, test error handling for API failures, and ensure the component re-checks availability when documents are added or removed.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:18:53.355Z"
+          },
+          {
+            "id": 4,
+            "title": "Enhance chat UI to indicate document-based responses",
+            "description": "Update the chat interface to visually indicate when responses are using document context versus general knowledge.",
+            "dependencies": [
+              3
+            ],
+            "details": "Modify the ChatMessage component to display visual indicators when responses are based on document context. Add styling for document-based responses, implement tooltips or icons to show document sources, and ensure the UI clearly differentiates between document-based and general knowledge responses. Update the message rendering logic to parse and display any citation information included in the responses.",
+            "status": "done",
+            "testStrategy": "Test UI rendering with various response types, verify document indicators display correctly, test responsive design of the enhanced UI components, and ensure accessibility of the new visual indicators.",
+            "parentId": "undefined",
+            "updatedAt": "2025-11-30T06:18:53.356Z"
+          },
+          {
+            "id": 5,
+            "title": "Implement end-to-end testing for RAG-enhanced chat",
+            "description": "Create comprehensive tests to verify the complete RAG-enhanced chat flow from frontend to backend.",
+            "dependencies": [
+              1,
+              2,
+              3,
+              4
+            ],
+            "details": "Develop end-to-end tests that verify the complete RAG integration, including document retrieval, context injection, and response generation. Test various scenarios such as queries matching documents, queries with no relevant documents, and handling of conversation context. Implement performance testing to ensure the RAG integration doesn't significantly impact response times.",
+            "status": "pending",
+            "testStrategy": "Create test cases for document-aware queries, test conversation continuity with document context, verify proper handling of queries without relevant documents, test system performance under load, and ensure proper user isolation for document access.",
+            "parentId": "undefined"
+          }
+        ],
+        "updatedAt": "2025-11-30T06:18:53.356Z"
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "lastModified": "2025-11-30T06:18:53.357Z",
+      "taskCount": 10,
+      "completedCount": 9,
+      "tags": [
+        "master"
+      ]
+    }
+  }
+}
